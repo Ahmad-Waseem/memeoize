@@ -1,0 +1,57 @@
+{
+  "name": "Meme Agent - BASELINE (naive, no reasoning)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meme-baseline",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-baseline",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": $json.body.text },\n      $json.body.image ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.body.image } } : null\n    ].filter(p => p !== null)\n  }]\n} }}",
+        "options": {}
+      },
+      "id": "gemini-baseline",
+      "name": "Gemini Image Gen (raw forward)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"image\": $json.candidates[0].content.parts[0].inline_data.data, \"mode\": \"baseline\" } }}"
+      },
+      "id": "respond-baseline",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Gemini Image Gen (raw forward)", "type": "main", "index": 0 }]]
+    },
+    "Gemini Image Gen (raw forward)": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "description": "Baseline: raw user text (+optional image) forwarded directly to the image model. No intent parsing, no prompt engineering, no verification. This is what a naive one-shot 'AI meme generator' looks like."
+  }
+}

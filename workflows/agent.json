@@ -1,0 +1,283 @@
+{
+  "name": "Meme Agent - FULL PIPELINE (understand -> engineer -> generate -> verify -> retry)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meme-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize per-request state carried through the loop\nreturn [{\n  json: {\n    user_text: $input.first().json.body.text,\n    reference_image_b64: $input.first().json.body.image || null,\n    retry_count: 0,\n    previous_attempt_feedback: null\n  }\n}];"
+      },
+      "id": "init-state",
+      "name": "Init State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.understand_intent_prompt }] },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"user_text: \" + $json.user_text + \"\\nhas_reference_image: \" + (!!$json.reference_image_b64) },\n      $json.reference_image_b64 ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.reference_image_b64 } } : null\n    ].filter(p => p !== null)\n  }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "options": {}
+      },
+      "id": "understand-intent",
+      "name": "Understand Intent (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Init State').item.json;\nreturn [{ json: { ...state, intent: parsed } }];"
+      },
+      "id": "parse-intent",
+      "name": "Parse Intent JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent.safety_flag }}",
+              "rightValue": "needs_review",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "safety-check",
+      "name": "Safety Flag?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"request_declined\", \"reason\": $json.intent.safety_reason } }}"
+      },
+      "id": "respond-declined",
+      "name": "Respond - Declined",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.engineer_prompt_prompt }] },\n  \"contents\": [{ \"parts\": [{ \"text\": JSON.stringify({ intent: $json.intent, previous_attempt_feedback: $json.previous_attempt_feedback }) }] }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "options": {}
+      },
+      "id": "engineer-prompt",
+      "name": "Engineer Image Prompt (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Parse Intent JSON').item.json;\nreturn [{ json: { ...state, image_edit_prompt: parsed.image_edit_prompt, engineer_reasoning: parsed.reasoning } }];"
+      },
+      "id": "parse-engineered-prompt",
+      "name": "Parse Engineered Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": $json.image_edit_prompt },\n      $json.reference_image_b64 ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.reference_image_b64 } } : null\n    ].filter(p => p !== null)\n  }]\n} }}",
+        "options": {}
+      },
+      "id": "generate-image",
+      "name": "Generate Image (Nano Banana)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Parse Engineered Prompt').item.json;\nconst imageData = $json.candidates[0].content.parts.find(p => p.inline_data)?.inline_data?.data;\nreturn [{ json: { ...state, generated_image_b64: imageData } }];"
+      },
+      "id": "extract-image",
+      "name": "Extract Generated Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.verify_prompt }] },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"image_edit_prompt: \" + $json.image_edit_prompt + \"\\ncomposition_notes: \" + $json.intent.composition_notes },\n      { \"inline_data\": { \"mime_type\": \"image/png\", \"data\": $json.generated_image_b64 } }\n    ]\n  }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "options": {}
+      },
+      "id": "verify-output",
+      "name": "Verify Output (LLM Vision)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Extract Generated Image').item.json;\nreturn [{ json: { ...state, verdict: parsed.verdict, issues: parsed.issues, retry_feedback: parsed.retry_feedback } }];"
+      },
+      "id": "parse-verdict",
+      "name": "Parse Verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.verdict }}",
+              "rightValue": "pass",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "verdict-pass",
+      "name": "Verdict Pass?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2640, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.retry_count }}",
+              "rightValue": 2,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "retry-budget",
+      "name": "Retries Left?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2860, 620]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $json;\nreturn [{ json: { ...state, retry_count: state.retry_count + 1, previous_attempt_feedback: state.retry_feedback } }];"
+      },
+      "id": "bump-retry",
+      "name": "Increment Retry Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 620]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": $json.verdict } }}"
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2860, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": \"retry_budget_exhausted\", \"last_issues\": $json.issues } }}"
+      },
+      "id": "respond-exhausted",
+      "name": "Respond - Retry Budget Exhausted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3080, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loads the three system prompts from disk (place the prompts/ files next to n8n's working dir,\n// or paste the contents directly here as string literals before importing).\nconst fs = require('fs');\nconst base = 'D:/repos/memeoize/prompts/';\nreturn [{\n  json: {\n    understand_intent_prompt: fs.readFileSync(base + '01_understand_intent.md', 'utf8'),\n    engineer_prompt_prompt: fs.readFileSync(base + '02_engineer_prompt.md', 'utf8'),\n    verify_prompt: fs.readFileSync(base + '03_verify_output.md', 'utf8')\n  }\n}];"
+      },
+      "id": "load-prompts",
+      "name": "Load Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Init State", "type": "main", "index": 0 }]] },
+    "Init State": { "main": [[{ "node": "Understand Intent (LLM)", "type": "main", "index": 0 }]] },
+    "Understand Intent (LLM)": { "main": [[{ "node": "Parse Intent JSON", "type": "main", "index": 0 }]] },
+    "Parse Intent JSON": { "main": [[{ "node": "Safety Flag?", "type": "main", "index": 0 }]] },
+    "Safety Flag?": {
+      "main": [
+        [{ "node": "Respond - Declined", "type": "main", "index": 0 }],
+        [{ "node": "Engineer Image Prompt (LLM)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Engineer Image Prompt (LLM)": { "main": [[{ "node": "Parse Engineered Prompt", "type": "main", "index": 0 }]] },
+    "Parse Engineered Prompt": { "main": [[{ "node": "Generate Image (Nano Banana)", "type": "main", "index": 0 }]] },
+    "Generate Image (Nano Banana)": { "main": [[{ "node": "Extract Generated Image", "type": "main", "index": 0 }]] },
+    "Extract Generated Image": { "main": [[{ "node": "Verify Output (LLM Vision)", "type": "main", "index": 0 }]] },
+    "Verify Output (LLM Vision)": { "main": [[{ "node": "Parse Verdict", "type": "main", "index": 0 }]] },
+    "Parse Verdict": { "main": [[{ "node": "Verdict Pass?", "type": "main", "index": 0 }]] },
+    "Verdict Pass?": {
+      "main": [
+        [{ "node": "Respond - Success", "type": "main", "index": 0 }],
+        [{ "node": "Retries Left?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Retries Left?": {
+      "main": [
+        [{ "node": "Increment Retry Count", "type": "main", "index": 0 }],
+        [{ "node": "Respond - Retry Budget Exhausted", "type": "main", "index": 0 }]
+      ]
+    },
+    "Increment Retry Count": { "main": [[{ "node": "Engineer Image Prompt (LLM)", "type": "main", "index": 0 }]] }
+  },
+  "meta": {
+    "description": "Full agent pipeline: understand intent -> safety check -> engineer edit prompt -> generate -> verify -> retry loop (max 2 retries) -> respond. Node IDs referencing 'Load Prompts' expect that node's output to carry the three prompt files' text; wire credentials for Gemini in n8n's credential manager before running."
+  }
+}
