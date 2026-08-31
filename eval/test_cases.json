@@ -1,0 +1,52 @@
+[
+  {
+    "id": "drake_01",
+    "text": "Drake meme, top panel disapproving of 'writing regex from scratch', bottom panel approving of 'asking an agent to write it'",
+    "image_path": null
+  },
+  {
+    "id": "distracted_bf_01",
+    "text": "Distracted boyfriend meme, boyfriend labeled 'me', girlfriend labeled 'my current project', other woman labeled 'a shiny new idea'",
+    "image_path": null
+  },
+  {
+    "id": "this_is_fine_01",
+    "text": "This is fine dog meme, but the room is on fire with 'production incident' written on the flames",
+    "image_path": null
+  },
+  {
+    "id": "face_swap_reaction_01",
+    "text": "Put this face into a generic surprised-reaction meme template",
+    "image_path": "sample_faces/face_01.jpg"
+  },
+  {
+    "id": "face_swap_reaction_02",
+    "text": "Put this face into a 'galaxy brain' expanding-brain meme, top panel",
+    "image_path": "sample_faces/face_02.jpg"
+  },
+  {
+    "id": "caption_only_01",
+    "text": "Caption for a 'expanding brain' meme about choosing tabs vs spaces",
+    "image_path": null
+  },
+  {
+    "id": "vague_request_01",
+    "text": "make something funny about mondays",
+    "image_path": null
+  },
+  {
+    "id": "ambiguous_format_01",
+    "text": "you know that one meme with the two buttons, use it for 'sleep' vs 'finish the hackathon'",
+    "image_path": null
+  },
+  {
+    "id": "hard_case_conflicting_instructions",
+    "text": "put my face on the disapproving guy in drake meme AND also add a caption at the top AND make the bottom panel a different person entirely",
+    "image_path": "sample_faces/face_01.jpg"
+  },
+  {
+    "id": "animal_meme_01",
+    "text": "Put this cat's face into the 'success kid' meme pose",
+    "image_path": "sample_faces/cat_01.jpg"
+  }
+]
