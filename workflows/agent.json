@@ -8,106 +8,153 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook",
+      "id": "f36218a3-d584-4046-b051-3ab5846d6f02",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [200, 400]
+      "position": [
+        -384,
+        16
+      ],
+      "webhookId": "1dcd4e1b-51bb-4250-9a19-0758efbb8f50"
     },
     {
       "parameters": {
-        "jsCode": "// Initialize per-request state carried through the loop\nreturn [{\n  json: {\n    user_text: $input.first().json.body.text,\n    reference_image_b64: $input.first().json.body.image || null,\n    retry_count: 0,\n    previous_attempt_feedback: null\n  }\n}];"
+        "jsCode": "return [{\n  json: {\n    user_text: $('Webhook').first().json.body.text,\n    reference_image_b64: $('Webhook').first().json.body.image || null,\n    retry_count: 0,\n    previous_attempt_feedback: null\n  }\n}];"
       },
-      "id": "init-state",
+      "id": "bfe0049f-89c5-43b8-bf4f-572d5cdfefcd",
       "name": "Init State",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 400]
+      "position": [
+        48,
+        16
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.understand_intent_prompt }] },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"user_text: \" + $json.user_text + \"\\nhas_reference_image: \" + (!!$json.reference_image_b64) },\n      $json.reference_image_b64 ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.reference_image_b64 } } : null\n    ].filter(p => p !== null)\n  }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \n    \"parts\": [{ \n      \"text\": $('Load Prompts').item.json.understand_intent_prompt + \"\\n\\nCRITICAL SEARCH RULE: Search for the real template image. In 'template_reference_url', supply a direct image URL ending in .jpg, .png, or from a known meme CDN (e.g. i.imgflip.com, i.kym-cdn.com, wikimedia.org). If only webpage URLs are returned, set it to null.\\nRespond with ONLY valid JSON, no markdown code fences, no extra commentary.\" \n    }] \n  },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"user_text: \" + $json.user_text + \"\\nhas_reference_image: \" + (!!$json.reference_image_b64) },\n      $json.reference_image_b64 ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.reference_image_b64 } } : null\n    ].filter(p => p !== null)\n  }],\n  \"tools\": [{ \"googleSearch\": {} }],\n  \"generationConfig\": {\n    \"thinkingConfig\": { \"thinkingLevel\": \"low\" },\n    \"maxOutputTokens\": 2048\n  }\n} }}",
         "options": {}
       },
-      "id": "understand-intent",
+      "id": "5d63b685-5541-42d8-8e07-0a726bc72dbb",
       "name": "Understand Intent (LLM)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 400]
+      "position": [
+        288,
+        16
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9ZLqTwuqrfp3W3Db",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Init State').item.json;\nreturn [{ json: { ...state, intent: parsed } }];"
+        "jsCode": "const rawText = $json.candidates[0].content.parts[0].text;\n// Remove potential markdown code fences and trim whitespace\nconst cleanText = rawText.replace(/```json|```/g, '').trim();\nconst parsed = JSON.parse(cleanText);\n\nreturn {\n  json: {\n    user_text: $('Init State').item.json.user_text,\n    reference_image_b64: $('Init State').item.json.reference_image_b64,\n    meme_format: parsed.meme_format,\n    format_known: parsed.format_known,\n    role_of_reference_image: parsed.role_of_reference_image,\n    composition_notes: parsed.composition_notes,\n    template_reference_url: parsed.template_reference_url || null,\n    text_overlay: parsed.text_overlay,\n    safety_flag: parsed.safety_flag,\n    safety_reason: parsed.safety_reason\n  }\n};"
       },
-      "id": "parse-intent",
+      "id": "8a0239db-1f80-4a82-896d-54777204371b",
       "name": "Parse Intent JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 400]
+      "position": [
+        512,
+        16
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
           "conditions": [
             {
               "leftValue": "={{ $json.intent.safety_flag }}",
               "rightValue": "needs_review",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "safety-check",
+      "id": "0f9ba5fa-99c4-4feb-bc45-8464f3557f60",
       "name": "Safety Flag?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1100, 400]
+      "position": [
+        736,
+        16
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"error\": \"request_declined\", \"reason\": $json.intent.safety_reason } }}"
+        "responseBody": "={{ { \"error\": \"request_declined\", \"reason\": $json.intent.safety_reason } }}",
+        "options": {}
       },
-      "id": "respond-declined",
+      "id": "c8255241-a766-4269-960e-e25b8aa2d03f",
       "name": "Respond - Declined",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1320, 260]
+      "position": [
+        960,
+        -128
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.engineer_prompt_prompt }] },\n  \"contents\": [{ \"parts\": [{ \"text\": JSON.stringify({ intent: $json.intent, previous_attempt_feedback: $json.previous_attempt_feedback }) }] }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \n    \"parts\": [{ \n      \"text\": $('Load Prompts').item.json.engineer_prompt_prompt + \"\\n\\nRespond with ONLY the JSON object, no markdown code fences, no extra commentary.\" \n    }] \n  },\n  \"contents\": [{ \n    \"parts\": [{ \n      \"text\": JSON.stringify({\n        meme_format: $json.meme_format || $json.intent?.meme_format,\n        composition_notes: $json.composition_notes || $json.intent?.composition_notes,\n        template_reference_url: $json.template_reference_url || $json.intent?.template_reference_url || null,\n        text_overlay: $json.text_overlay || $json.intent?.text_overlay,\n        role_of_reference_image: $json.role_of_reference_image || $json.intent?.role_of_reference_image,\n        previous_attempt_feedback: $json.previous_attempt_feedback || null\n      }) \n    }] \n  }],\n  \"generationConfig\": {\n    \"thinkingConfig\": { \"thinkingLevel\": \"low\" },\n    \"maxOutputTokens\": 2048\n  }\n} }}",
         "options": {}
       },
-      "id": "engineer-prompt",
+      "id": "80446526-68ae-4d93-9658-4aa84498b92e",
       "name": "Engineer Image Prompt (LLM)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 500]
+      "position": [
+        960,
+        112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9ZLqTwuqrfp3W3Db",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Parse Intent JSON').item.json;\nreturn [{ json: { ...state, image_edit_prompt: parsed.image_edit_prompt, engineer_reasoning: parsed.reasoning } }];"
+        "jsCode": "const rawText = $json.candidates[0].content.parts[0].text;\nconst cleanText = rawText.replace(/```json|```/g, '').trim();\nconst parsed = JSON.parse(cleanText);\n\nreturn {\n  json: {\n    ...$json,\n    image_edit_prompt: parsed.image_edit_prompt,\n    engineer_reasoning: parsed.reasoning\n  }\n};"
       },
-      "id": "parse-engineered-prompt",
+      "id": "fe56a181-d2d7-4b0b-aff7-edae2f59e519",
       "name": "Parse Engineered Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1540, 500]
+      "position": [
+        1168,
+        112
+      ]
     },
     {
       "parameters": {
@@ -120,164 +167,392 @@
         "jsonBody": "={{ {\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": $json.image_edit_prompt },\n      $json.reference_image_b64 ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.reference_image_b64 } } : null\n    ].filter(p => p !== null)\n  }]\n} }}",
         "options": {}
       },
-      "id": "generate-image",
+      "id": "13473369-c324-4065-af1b-a7e8962a6638",
       "name": "Generate Image (Nano Banana)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 500]
+      "position": [
+        1392,
+        112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9ZLqTwuqrfp3W3Db",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const state = $('Parse Engineered Prompt').item.json;\nconst imageData = $json.candidates[0].content.parts.find(p => p.inline_data)?.inline_data?.data;\nreturn [{ json: { ...state, generated_image_b64: imageData } }];"
+        "jsCode": "const state = $('Parse Engineered Prompt').item.json;\n\nconst parts = $json.candidates[0].content.parts;\nconst imagePart = parts.find(p => p.inline_data || p.inlineData);\n\nconst imageData = imagePart?.inline_data?.data || imagePart?.inlineData?.data;\n\nif (!imageData) {\n  throw new Error('No image data found in generation response. Raw parts: ' + JSON.stringify(parts));\n}\n\nreturn [{ json: { ...state, generated_image_b64: imageData } }];"
       },
-      "id": "extract-image",
+      "id": "88fddcd7-2d0e-4690-9c9c-d7c1ab12e2ca",
       "name": "Extract Generated Image",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1980, 500]
+      "position": [
+        1616,
+        112
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  \"system_instruction\": { \"parts\": [{ \"text\": $('Load Prompts').item.json.verify_prompt }] },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"image_edit_prompt: \" + $json.image_edit_prompt + \"\\ncomposition_notes: \" + $json.intent.composition_notes },\n      { \"inline_data\": { \"mime_type\": \"image/png\", \"data\": $json.generated_image_b64 } }\n    ]\n  }],\n  \"generationConfig\": { \"response_mime_type\": \"application/json\" }\n} }}",
+        "jsonBody": "={{ {\n  \"system_instruction\": { \n    \"parts\": [{ \n      \"text\": $('Load Prompts').item.json.verify_prompt + \"\\n\\nRespond with ONLY the JSON object, no markdown code fences, no extra commentary.\" \n    }] \n  },\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": \"image_edit_prompt: \" + ($('Parse Engineered Prompt').item.json.image_edit_prompt || \"\") + \"\\ncomposition_notes: \" + ($('Parse Intent JSON').item.json.composition_notes || \"\") + \"\\ntemplate_reference_url: \" + ($('Parse Intent JSON').item.json.template_reference_url || \"None\") },\n      { \"inline_data\": { \"mime_type\": \"image/png\", \"data\": $json.generated_image_b64 } }\n    ]\n  }],\n  \"generationConfig\": {\n    \"thinkingConfig\": { \"thinkingLevel\": \"low\" },\n    \"maxOutputTokens\": 2048\n  }\n} }}",
         "options": {}
       },
-      "id": "verify-output",
+      "id": "84c1d290-17f7-478b-97bf-7c994c5084fa",
       "name": "Verify Output (LLM Vision)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2200, 500]
+      "position": [
+        1840,
+        112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9ZLqTwuqrfp3W3Db",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const parsed = JSON.parse($json.candidates[0].content.parts[0].text);\nconst state = $('Extract Generated Image').item.json;\nreturn [{ json: { ...state, verdict: parsed.verdict, issues: parsed.issues, retry_feedback: parsed.retry_feedback } }];"
+        "jsCode": "let raw = $json.candidates[0].content.parts[0].text;\nraw = raw.replace(/```json\\s*/g, '').replace(/```\\s*/g, '').trim();\nconst parsed = JSON.parse(raw);\nconst state = $('Extract Generated Image').item.json;\nreturn [{ json: { ...state, verdict: parsed.verdict, issues: parsed.issues, retry_feedback: parsed.retry_feedback } }];"
       },
-      "id": "parse-verdict",
+      "id": "c78193d6-b0fe-4ddb-a4a8-a331a37b27ff",
       "name": "Parse Verdict",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2420, 500]
+      "position": [
+        2048,
+        112
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
           "conditions": [
             {
               "leftValue": "={{ $json.verdict }}",
               "rightValue": "pass",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "verdict-pass",
+      "id": "d7f4575a-ab1c-418f-a44f-4df0d81bda82",
       "name": "Verdict Pass?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2640, 500]
+      "position": [
+        2272,
+        112
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
           "conditions": [
             {
               "leftValue": "={{ $json.retry_count }}",
               "rightValue": 2,
-              "operator": { "type": "number", "operation": "lt" }
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "retry-budget",
+      "id": "5167b5b8-5c81-4d8f-a1bd-722e8b01f2b9",
       "name": "Retries Left?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2860, 620]
+      "position": [
+        2496,
+        240
+      ]
     },
     {
       "parameters": {
         "jsCode": "const state = $json;\nreturn [{ json: { ...state, retry_count: state.retry_count + 1, previous_attempt_feedback: state.retry_feedback } }];"
       },
-      "id": "bump-retry",
+      "id": "62a69f54-1d3c-44eb-bc44-0be525b44b90",
       "name": "Increment Retry Count",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3080, 620]
+      "position": [
+        2720,
+        240
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": $json.verdict } }}"
+        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": $json.verdict } }}",
+        "options": {}
       },
-      "id": "respond-success",
+      "id": "fb54bb20-de2e-4be7-9934-e956a83c1808",
       "name": "Respond - Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2860, 380]
+      "position": [
+        2496,
+        -16
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": \"retry_budget_exhausted\", \"last_issues\": $json.issues } }}"
+        "responseBody": "={{ { \"image\": $json.generated_image_b64, \"mode\": \"agent\", \"retries_used\": $json.retry_count, \"verdict\": \"retry_budget_exhausted\", \"last_issues\": $json.issues } }}",
+        "options": {}
       },
-      "id": "respond-exhausted",
+      "id": "fca71dc9-709d-4241-b66b-eb25652aa11b",
       "name": "Respond - Retry Budget Exhausted",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3080, 800]
+      "position": [
+        2720,
+        416
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Loads the three system prompts from disk (place the prompts/ files next to n8n's working dir,\n// or paste the contents directly here as string literals before importing).\nconst fs = require('fs');\nconst base = 'D:/repos/memeoize/prompts/';\nreturn [{\n  json: {\n    understand_intent_prompt: fs.readFileSync(base + '01_understand_intent.md', 'utf8'),\n    engineer_prompt_prompt: fs.readFileSync(base + '02_engineer_prompt.md', 'utf8'),\n    verify_prompt: fs.readFileSync(base + '03_verify_output.md', 'utf8')\n  }\n}];"
+        "jsCode": "return [{\n\n  json: {\n\n    understand_intent_prompt: `You are analyzing a user's meme request to extract structured intent before any image generation happens.\n\n## Input\n\n- user_text: the raw request describing a meme to create, e.g. \"[format name], [caption/context]\"\n\n- has_reference_image: boolean, whether the user attached a photo\n\n## Your task\n\nOutput ONLY valid JSON with this shape:\n\n{\n\n  \"meme_format\": \"string - name of the meme template/format being referenced, or 'custom' if none\",\n\n  \"format_known\": true,\n\n  \"role_of_reference_image\": \"string - what the attached image is meant to represent in the meme\",\n\n  \"composition_notes\": \"string - a DETAILED visual description sufficient to recreate the template exactly: exact panel layout/count, background color/pattern, each subject's exact pose/expression/hand position/clothing, camera framing (close-up vs waist-up), and any fixed visual elements the format is known for. If this is a well-known template, describe it as precisely as if briefing an illustrator who has never seen it.\",\n\n  \"template_reference_url\": \"string or null - if a real URL to the exact template image was found via search, put it here, otherwise null\",\n\n  \"text_overlay\": \"string or null - any caption/text the meme needs, verbatim if specified, otherwise null\",\n\n  \"safety_flag\": \"none | needs_review\",\n\n  \"safety_reason\": \"string or null - set only if safety_flag is needs_review\"\n\n}\n\n## Notes\n\n- If meme_format is ambiguous, do your best guess and set format_known to false rather than refusing.\n\n- Keep composition_notes concrete enough for a downstream step to act on without re-asking the user.\n\n- For well-known meme formats, use the search tool to find the actual template image, and draw on those real visual details (exact background color, exact pose, exact framing, exact clothing) rather than a generic paraphrase - precision here directly determines how close the final image gets to the real template.\n\n- When search results include a URL pointing directly to the template image itself (not an article page), include that URL in template_reference_url.`,\n\n    engineer_prompt_prompt: `You convert structured intent into a single, precise prompt for an image generation/editing model (Gemini image generation / \"Nano Banana\").\n\n## Input\n\nThe JSON object from Step 1, plus (on retries) previous_attempt_feedback: what was wrong with the last generated image.\n\n## Your task\n\nOutput ONLY valid JSON:\n\n{\n\n  \"image_edit_prompt\": \"string - the final prompt to send to the image model\",\n\n  \"reasoning\": \"string - 1-2 sentences on why you composed the prompt this way\"\n\n}\n\n## Guidance\n\n- Be explicit about WHERE the reference subject goes, at WHAT scale, and WHAT expression/pose to preserve.\n\n- Reference the meme format's known visual structure by name if well-known.\n\n- If there's a text_overlay, specify exact placement: solid black or white caption bar at the bottom (not the photo background bleeding through), bold Impact/Anton-style all-caps font, black outline if on a light background.\n\n- Preserve the reference subject's actual likeness/identity - do not describe generic replacement features.\n\n- If previous_attempt_feedback is present, directly address the specific defect mentioned.\n\n- Never include instructions that would require generating or altering an image of a real minor. If safety_flag was needs_review, return image_edit_prompt: null instead.`,\n\n    verify_prompt: `You are a quality-control reviewer looking at a generated meme image before it's returned to the user.\n\n## Input\n\n- The generated image\n\n- The original image_edit_prompt it was supposed to satisfy\n\n- composition_notes from Step 1\n\n## Your task\n\nOutput ONLY valid JSON:\n\n{\n\n  \"verdict\": \"pass | retry\",\n\n  \"issues\": [\"string\", \"...\"],\n\n  \"retry_feedback\": \"string or null - if verdict is retry, a specific actionable description of what to fix\"\n\n}\n\n## What to check\n\n- Is the reference subject's face/likeness recognizable and correctly placed (not distorted, misaligned, or duplicated)?\n\n- Does the composition match the requested meme format's structure (panel layout, pose, expression)?\n\n- Is any requested text overlay present, legible, and correctly placed on a solid caption bar (not bleeding into the photo background)?\n\n- Does the image look like a real, postable meme rather than an obviously broken generation?\n\n## Rules\n\n- Be strict but fair - minor stylistic differences are fine; structural/likeness errors are not.`\n\n  }\n\n}];"
       },
-      "id": "load-prompts",
+      "id": "5e34ce19-7d67-45dd-9636-dbef93e5aa29",
       "name": "Load Prompts",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 200]
+      "position": [
+        -176,
+        16
+      ]
     }
   ],
+  "pinData": {},
   "connections": {
-    "Webhook": { "main": [[{ "node": "Init State", "type": "main", "index": 0 }]] },
-    "Init State": { "main": [[{ "node": "Understand Intent (LLM)", "type": "main", "index": 0 }]] },
-    "Understand Intent (LLM)": { "main": [[{ "node": "Parse Intent JSON", "type": "main", "index": 0 }]] },
-    "Parse Intent JSON": { "main": [[{ "node": "Safety Flag?", "type": "main", "index": 0 }]] },
-    "Safety Flag?": {
+    "Webhook": {
       "main": [
-        [{ "node": "Respond - Declined", "type": "main", "index": 0 }],
-        [{ "node": "Engineer Image Prompt (LLM)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Load Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Engineer Image Prompt (LLM)": { "main": [[{ "node": "Parse Engineered Prompt", "type": "main", "index": 0 }]] },
-    "Parse Engineered Prompt": { "main": [[{ "node": "Generate Image (Nano Banana)", "type": "main", "index": 0 }]] },
-    "Generate Image (Nano Banana)": { "main": [[{ "node": "Extract Generated Image", "type": "main", "index": 0 }]] },
-    "Extract Generated Image": { "main": [[{ "node": "Verify Output (LLM Vision)", "type": "main", "index": 0 }]] },
-    "Verify Output (LLM Vision)": { "main": [[{ "node": "Parse Verdict", "type": "main", "index": 0 }]] },
-    "Parse Verdict": { "main": [[{ "node": "Verdict Pass?", "type": "main", "index": 0 }]] },
+    "Init State": {
+      "main": [
+        [
+          {
+            "node": "Understand Intent (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Understand Intent (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent JSON": {
+      "main": [
+        [
+          {
+            "node": "Safety Flag?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Flag?": {
+      "main": [
+        [
+          {
+            "node": "Respond - Declined",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Engineer Image Prompt (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engineer Image Prompt (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Parse Engineered Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Engineered Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Image (Nano Banana)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image (Nano Banana)": {
+      "main": [
+        [
+          {
+            "node": "Extract Generated Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Generated Image": {
+      "main": [
+        [
+          {
+            "node": "Verify Output (LLM Vision)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Output (LLM Vision)": {
+      "main": [
+        [
+          {
+            "node": "Parse Verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Verdict": {
+      "main": [
+        [
+          {
+            "node": "Verdict Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Verdict Pass?": {
       "main": [
-        [{ "node": "Respond - Success", "type": "main", "index": 0 }],
-        [{ "node": "Retries Left?", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retries Left?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Retries Left?": {
       "main": [
-        [{ "node": "Increment Retry Count", "type": "main", "index": 0 }],
-        [{ "node": "Respond - Retry Budget Exhausted", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Increment Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Retry Budget Exhausted",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Increment Retry Count": { "main": [[{ "node": "Engineer Image Prompt (LLM)", "type": "main", "index": 0 }]] }
+    "Increment Retry Count": {
+      "main": [
+        [
+          {
+            "node": "Engineer Image Prompt (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Prompts": {
+      "main": [
+        [
+          {
+            "node": "Init State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cfbff644-4ecf-43a8-9fb4-03cadb0898a5",
   "meta": {
-    "description": "Full agent pipeline: understand intent -> safety check -> engineer edit prompt -> generate -> verify -> retry loop (max 2 retries) -> respond. Node IDs referencing 'Load Prompts' expect that node's output to carry the three prompt files' text; wire credentials for Gemini in n8n's credential manager before running."
-  }
+    "instanceId": "adccaf00a662ad1b78e37a8a3bd7d7ed88d8dee111c5168a4251318f686650a9"
+  },
+  "id": "SSacNxagi6PH0Jn1",
+  "tags": []
 }

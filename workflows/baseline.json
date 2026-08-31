@@ -8,11 +8,15 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-baseline",
+      "id": "4f2ee83a-a2e2-4f88-9049-a4b1c585f292",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "abb43648-66a5-4860-b425-7819879942db"
     },
     {
       "parameters": {
@@ -25,33 +29,71 @@
         "jsonBody": "={{ {\n  \"contents\": [{\n    \"parts\": [\n      { \"text\": $json.body.text },\n      $json.body.image ? { \"inline_data\": { \"mime_type\": \"image/jpeg\", \"data\": $json.body.image } } : null\n    ].filter(p => p !== null)\n  }]\n} }}",
         "options": {}
       },
-      "id": "gemini-baseline",
+      "id": "aba23c67-4e67-4677-9946-4a3ee13c0401",
       "name": "Gemini Image Gen (raw forward)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300]
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9ZLqTwuqrfp3W3Db",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"image\": $json.candidates[0].content.parts[0].inline_data.data, \"mode\": \"baseline\" } }}"
+        "responseBody": "={{ { \"image\": $json.candidates[0].content.parts[0].inline_data.data, \"mode\": \"baseline\" } }}",
+        "options": {}
       },
-      "id": "respond-baseline",
+      "id": "6b8229a0-dbec-40c8-8d7e-e135fbd368b1",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 300]
+      "position": [
+        480,
+        0
+      ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Gemini Image Gen (raw forward)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Gemini Image Gen (raw forward)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Gemini Image Gen (raw forward)": {
-      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c5ae7039-2455-4bd5-91af-5e9951ca37fc",
   "meta": {
-    "description": "Baseline: raw user text (+optional image) forwarded directly to the image model. No intent parsing, no prompt engineering, no verification. This is what a naive one-shot 'AI meme generator' looks like."
-  }
+    "instanceId": "adccaf00a662ad1b78e37a8a3bd7d7ed88d8dee111c5168a4251318f686650a9"
+  },
+  "id": "1VIpOwVBgqzUaVeR",
+  "tags": []
 }
