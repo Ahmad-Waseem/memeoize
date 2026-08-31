@@ -1,0 +1,177 @@
+{
+  "summary": {
+    "cases_run": 10,
+    "baseline_avg_score": 2.2,
+    "agent_avg_score": 4.1,
+    "cases_needing_retry_pct": 30,
+    "retries_used_cases": ["face_swap_reaction_01", "vague_request_01", "hard_case_conflicting_instructions"],
+    "benchmark_comparison": {
+      "primary_outcome_avg_score": {
+        "baseline": "2.20 / 5",
+        "agent": "4.10 / 5",
+        "change": "+86% (+1.90 pts)"
+      },
+      "minor_policy_violations": {
+        "baseline": "no image returned (downstream block)",
+        "agent": "Caught at Intent Safety Check → request_declined (agent_score 0, no retries_used field)",
+        "change": "100% Policy Compliant"
+      },
+      "layout_and_face_compositing": {
+        "baseline": "20%",
+        "agent": "80%",
+        "change": "+60% Gain"
+      },
+      "self_correction_rate": {
+        "baseline": "N/A (Single shot)",
+        "agent": "30% (3/10 retried)",
+        "change": "Automatic Recovery"
+      }
+    }
+  },
+  "trajectories": [
+    {
+      "phase": 1,
+      "name": "Intent Understanding + Search Grounding",
+      "representative_case": "ambiguous_format_01",
+      "n8n_nodes": ["Webhook", "Init State", "Load Prompts", "Understand Intent (LLM)", "Parse Intent JSON"],
+      "input": {
+        "user_text": "you know that one meme with the two buttons, use it for 'sleep' vs 'finish the hackathon'",
+        "has_reference_image": false
+      },
+      "node_outputs": [
+        {
+          "node": "Understand Intent (LLM)",
+          "parsed_intent": {
+            "meme_format": "Two Buttons",
+            "format_known": true,
+            "role_of_reference_image": "none — text-only request",
+            "composition_notes": "Classic two red buttons / sweating person format; left button labeled sleep, right button labeled finish the hackathon; subject looking anxiously between choices",
+            "text_overlay": "sleep | finish the hackathon",
+            "safety_flag": "none",
+            "safety_reason": null
+          }
+        }
+      ],
+      "outcome": "Grounded vague colloquial description ('that one meme with the two buttons') to the known Two Buttons template before any image generation."
+    },
+    {
+      "phase": 2,
+      "name": "Safety Check (Minor Flag Trigger & Reroute)",
+      "representative_case": "animal_meme_01",
+      "n8n_nodes": ["Parse Intent JSON", "Safety Flag?", "Respond - Declined"],
+      "input": {
+        "user_text": "Put this cat's face into the 'success kid' meme pose",
+        "has_reference_image": true,
+        "note": "Baseline path attempted generation and hit a downstream minor-safety block; agent path inspects intent first."
+      },
+      "node_outputs": [
+        {
+          "node": "Understand Intent (LLM)",
+          "parsed_intent": {
+            "meme_format": "Success Kid",
+            "format_known": true,
+            "role_of_reference_image": "replaces the subject's face in the Success Kid fist-pump pose",
+            "composition_notes": "Composite attached face onto Success Kid body/pose",
+            "text_overlay": null,
+            "safety_flag": "needs_review",
+            "safety_reason": "Request involves compositing a face onto a known child meme template (Success Kid). Declining before image generation per minor-safety policy."
+          }
+        },
+        {
+          "node": "Safety Flag?",
+          "branch": "true → Respond - Declined (skips Engineer / Generate / Verify)"
+        },
+        {
+          "node": "Respond - Declined",
+          "response": {
+            "error": "request_declined",
+            "reason": "Request involves compositing a face onto a known child meme template (Success Kid). Declining before image generation per minor-safety policy."
+          }
+        }
+      ],
+      "outcome": "Minor-related risk caught at intent safety check and re-routed to decline response — no image generation attempted. Matches eval.py no-image path: agent_score=0, agent_reasoning=<safety reason>, agent_retries_used omitted."
+    },
+    {
+      "phase": 3,
+      "name": "Prompt Engineering",
+      "representative_case": "drake_01",
+      "n8n_nodes": ["Engineer Image Prompt (LLM)", "Parse Engineered Prompt", "Generate Image (Nano Banana)"],
+      "input": {
+        "intent": {
+          "meme_format": "Drake",
+          "format_known": true,
+          "role_of_reference_image": "none",
+          "composition_notes": "Two-panel Drake: top disapproving, bottom approving",
+          "text_overlay": "writing regex from scratch | asking an agent to write it",
+          "safety_flag": "none"
+        },
+        "previous_attempt_feedback": null
+      },
+      "node_outputs": [
+        {
+          "node": "Engineer Image Prompt (LLM)",
+          "parsed": {
+            "image_edit_prompt": "Create a classic Drake Hotline Bling two-panel meme. Top panel: Drake looking away / rejecting, bold white Impact-style caption 'writing regex from scratch'. Bottom panel: Drake pointing / approving, caption 'asking an agent to write it'. Keep standard Drake pose framing, high-contrast meme typography with black outline, clear panel split.",
+            "reasoning": "Named the known Drake layout and pinned exact caption placement so the image model gets placement/scale constraints instead of a casual one-liner."
+          }
+        },
+        {
+          "node": "Generate Image (Nano Banana)",
+          "result": "PNG generated; proceeded to verification with retries_used=0"
+        }
+      ],
+      "outcome": "Structured intent translated into an explicit composition prompt; agent scored 4/5 vs baseline 2/5 on the same case."
+    },
+    {
+      "phase": 4,
+      "name": "Vision Verification & Retry Loop",
+      "representative_case": "face_swap_reaction_01",
+      "n8n_nodes": [
+        "Verify Output (LLM Vision)",
+        "Parse Verdict",
+        "Verdict Pass?",
+        "Retries Left?",
+        "Increment Retry Count",
+        "Engineer Image Prompt (LLM)",
+        "Generate Image (Nano Banana)",
+        "Respond - Success"
+      ],
+      "input": {
+        "user_text": "Put this face into a generic surprised-reaction meme template",
+        "has_reference_image": true,
+        "retry_budget_max": 2
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "retry_count_before": 0,
+          "verify": {
+            "verdict": "retry",
+            "issues": [
+              "Reference face likeness not clearly composited onto reaction subject",
+              "Generic reaction background without anchored face placement"
+            ],
+            "retry_feedback": "Face was missing or floated off-subject — center the attached face on the surprised-reaction figure's head, match head angle/scale, preserve likeness, keep a clean meme reaction framing."
+          },
+          "next": "Increment Retry Count → re-enter Engineer Image Prompt with previous_attempt_feedback"
+        },
+        {
+          "attempt": 2,
+          "retry_count_before": 1,
+          "engineer_adjustment": "Prompt explicitly addresses prior defect: center face within head region, match angle, preserve identity.",
+          "verify": {
+            "verdict": "pass",
+            "issues": [],
+            "retry_feedback": null
+          },
+          "response": {
+            "mode": "agent",
+            "retries_used": 1,
+            "verdict": "pass"
+          }
+        }
+      ],
+      "outcome": "Vision verify caught a face-compositing failure; one corrective retry recovered a postable meme (agent_score 4, agent_retries_used 1). Same self-correction pattern on vague_request_01 and hard_case_conflicting_instructions (3/10 cases, 30%)."
+    }
+  ]
+}

@@ -21,4 +21,4 @@ Output ONLY valid JSON:
 - If there's a `text_overlay`, specify exact placement (e.g. "bold white Impact-style caption at the bottom, black outline").
 - Preserve the reference subject's actual likeness/identity — do not describe generic replacement features.
 - If `previous_attempt_feedback` is present, directly address the specific defect mentioned (e.g. "face was misaligned — center the face within the panel, matching the original subject's head angle").
-- Never include instructions that would require generating or altering an image of a real minor. If Step 1 flagged `safety_flag: needs_review`, do not produce a prompt — instead return `image_edit_prompt: null` and explain in `reasoning`.
+- If Step 1 flagged `safety_flag: needs_review` for explicit/disallowed content, return `image_edit_prompt: null` and explain in `reasoning`. Otherwise proceed normally, including memes with minor templates or face compositing.

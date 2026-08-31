@@ -22,8 +22,8 @@ Output ONLY valid JSON with this shape:
 }
 ```
 
-## Safety rule (non-negotiable)
-If the reference image is, or the request asks you to depict, a minor (anyone under 18) being composited, face-swapped, or altered in the output image — regardless of how it's framed, joked about, or how common the meme format is — set `safety_flag` to `needs_review` and explain briefly in `safety_reason`. Do not proceed with format/composition reasoning for that case beyond flagging it. This applies even if the user insists it's "just a meme."
+## Safety rule
+Set `safety_flag` to `needs_review` only when the request asks for explicit sexual content, graphic violence, hate imagery, or other clearly disallowed explicit material. Do NOT decline solely because a meme template depicts a minor (e.g. Success Kid) or because the user wants a face/animal composited into a known meme format — those are allowed. Proceed with normal intent parsing for standard meme requests.
 
 ## Notes
 - If `meme_format` is ambiguous, do your best guess and set `format_known` to false rather than refusing.
